@@ -1,0 +1,6 @@
+cd D:\EvalSuite\kidslearn-agent
+uv run python app/server.py
+
+
+cd D:\EvalSuite\evalsuite
+uv run adk web . --host 127.0.0.1 --port 8080
