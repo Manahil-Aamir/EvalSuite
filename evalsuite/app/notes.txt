@@ -4,3 +4,36 @@ uv run python app/server.py
 
 cd D:\EvalSuite\evalsuite
 uv run adk web . --host 127.0.0.1 --port 8080
+
+
+- CSV
+
+f11115,292929,9cb5dd,e2d3f0,3965a7,b995db,87ff53
+
+- With #
+
+#f11115, #292929, #9cb5dd, #e2d3f0, #3965a7, #b995db, #87ff53
+
+- Array
+
+["f11115","292929","9cb5dd","e2d3f0","3965a7","b995db","87ff53"]
+
+- Object
+
+{"Racing Red":"f11115","Graphite":"292929","Powder Blue":"9cb5dd","Lavender Veil":"e2d3f0","Tech Blue":"3965a7","Wisteria":"b995db","Neon Grass":"87ff53"}
+
+- Extended Array
+
+[{"name":"Racing Red","hex":"f11115","rgb":[241,17,21],"cmyk":[0,93,91,5],"hsb":[359,93,95],"hsl":[359,89,51],"lab":[51,76,59]},{"name":"Graphite","hex":"292929","rgb":[41,41,41],"cmyk":[0,0,0,84],"hsb":[0,0,16],"hsl":[0,0,16],"lab":[17,0,0]},{"name":"Powder Blue","hex":"9cb5dd","rgb":[156,181,221],"cmyk":[29,18,0,13],"hsb":[217,29,87],"hsl":[217,49,74],"lab":[73,1,-23]},{"name":"Lavender Veil","hex":"e2d3f0","rgb":[226,211,240],"cmyk":[6,12,0,6],"hsb":[271,12,94],"hsl":[271,49,88],"lab":[87,10,-12]},{"name":"Tech Blue","hex":"3965a7","rgb":[57,101,167],"cmyk":[66,40,0,35],"hsb":[216,66,65],"hsl":[216,49,44],"lab":[43,7,-40]},{"name":"Wisteria","hex":"b995db","rgb":[185,149,219],"cmyk":[16,32,0,14],"hsb":[271,32,86],"hsl":[271,49,72],"lab":[67,27,-31]},{"name":"Neon Grass","hex":"87ff53","rgb":[135,255,83],"cmyk":[47,0,67,0],"hsb":[102,67,100],"hsl":[102,100,66],"lab":[90,-63,69]}]
+
+- XML
+
+<palette>
+  <color name="Racing Red" hex="f11115" r="241" g="17" b="21" />
+  <color name="Graphite" hex="292929" r="41" g="41" b="41" />
+  <color name="Powder Blue" hex="9cb5dd" r="156" g="181" b="221" />
+  <color name="Lavender Veil" hex="e2d3f0" r="226" g="211" b="240" />
+  <color name="Tech Blue" hex="3965a7" r="57" g="101" b="167" />
+  <color name="Wisteria" hex="b995db" r="185" g="149" b="219" />
+  <color name="Neon Grass" hex="87ff53" r="135" g="255" b="83" />
+</palette>
