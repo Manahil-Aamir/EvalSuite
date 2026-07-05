@@ -195,6 +195,49 @@ spec_parser_cleaner = FunctionNode(
 )
 spec_parser_cleaner.output_schema = EvalSpec
 
+def _split_and_clean(text: str) -> list[str]:
+    """Splits text on newlines, strips each line, applies bullet-regex cleanup, and returns non-empty cleaned lines."""
+    cleaned_lines = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        cleaned_line = re.sub(r'^(?:\d+\.|\*|-|•)\s*', '', line).strip()
+        if cleaned_line:
+            cleaned_lines.append(cleaned_line)
+    return cleaned_lines
+
+
+def extract_guidelines_from_text(text_val: str) -> list[str]:
+    """Tries json.loads(text_val). If it parses to a dict, extracts answerText and sources/searchResults.
+
+    Otherwise, falls back to direct bullet-regex cleaning on raw text.
+    """
+    try:
+        data = json.loads(text_val)
+    except Exception:
+        data = None
+
+    if isinstance(data, dict):
+        guidelines = []
+        answer_text = data.get("answerText", "")
+        if answer_text and "could not be generated" not in answer_text.lower():
+            guidelines.extend(_split_and_clean(answer_text))
+
+        sources_list = data.get("sources") or data.get("searchResults") or []
+        if isinstance(sources_list, list):
+            for source in sources_list:
+                if isinstance(source, dict):
+                    val = source.get("snippet") or source.get("text") or source.get("title")
+                    if val:
+                        guidelines.extend(_split_and_clean(str(val)))
+                elif isinstance(source, str):
+                    guidelines.extend(_split_and_clean(source))
+        return guidelines
+
+    return _split_and_clean(text_val)
+
+
 async def enrich_spec_with_mcp(ctx: Context, node_input: dict | EvalSpec | None = None) -> Event:
     """Connects to Google Developer Knowledge MCP server to fetch security best practices."""
     spec_input = node_input or ctx.state.get("spec")
@@ -219,14 +262,14 @@ async def enrich_spec_with_mcp(ctx: Context, node_input: dict | EvalSpec | None 
             spec_dict["security_guidelines"] = []
         return Event(output=spec_dict, state={"spec": spec_dict})
 
-    # Construct the query based on forbidden_topics and prohibited_behaviors
-    query_parts = []
-    if forbidden_topics:
-        query_parts.append(f"forbidden topics: {', '.join(forbidden_topics)}")
-    if prohibited_behaviors:
-        query_parts.append(f"prohibited behaviors: {', '.join(prohibited_behaviors)}")
+    # Refactor into separate, per-topic queries
+    queries = []
+    for ft in forbidden_topics:
+        queries.append(f"Security guidelines and best practices for avoiding: {ft}")
+    for pb in prohibited_behaviors:
+        queries.append(f"Security guidelines and best practices for preventing: {pb}")
 
-    query = f"Security guidelines and best practices for preventing: {'; '.join(query_parts)}"
+    print(f"[MCP ENRICHER] Generated {len(queries)} queries: {queries}")
 
     mcp_url = os.getenv("GOOGLE_DEVELOPER_KNOWLEDGE_URL") or "https://developerknowledge.googleapis.com/mcp"
     api_key = os.getenv("GOOGLE_DEVELOPER_KNOWLEDGE_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -256,35 +299,13 @@ async def enrich_spec_with_mcp(ctx: Context, node_input: dict | EvalSpec | None 
     except Exception as auth_err:
         print(f"[MCP ENRICHER] Failed to get Google OAuth token: {auth_err}")
 
+    guidelines = []
     text_content = ""
     try:
         print(f"[MCP ENRICHER] Connecting to MCP server at {mcp_url} via HTTP...")
         async with httpx.AsyncClient() as mcp_client:
-            # Call answer_query first
-            response = await mcp_client.post(
-                mcp_url,
-                headers=headers,
-                json={
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "tools/call",
-                    "params": {
-                        "name": "answer_query",
-                        "arguments": {"query": query}
-                    }
-                },
-                timeout=15.0
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                content = result.get("result", {}).get("content", [])
-                for item in content:
-                    if item.get("type") == "text":
-                        text_content += item.get("text", "") + "\n"
-            else:
-                print(f"[MCP ENRICHER] answer_query failed with status {response.status_code}. Trying search_documents fallback...")
-                # Fallback to search_documents
+            for q in queries:
+                print(f"[MCP ENRICHER] Calling answer_query with query: '{q}'")
                 response = await mcp_client.post(
                     mcp_url,
                     headers=headers,
@@ -293,34 +314,94 @@ async def enrich_spec_with_mcp(ctx: Context, node_input: dict | EvalSpec | None 
                         "id": 1,
                         "method": "tools/call",
                         "params": {
-                            "name": "search_documents",
-                            "arguments": {"query": query}
+                            "name": "answer_query",
+                            "arguments": {"query": q}
                         }
                     },
                     timeout=15.0
                 )
+                print(f"[MCP ENRICHER] Query '{q}' -> status {response.status_code}, response length {len(response.text)}")
+
                 if response.status_code == 200:
                     result = response.json()
                     content = result.get("result", {}).get("content", [])
                     for item in content:
                         if item.get("type") == "text":
-                            text_content += item.get("text", "") + "\n"
+                            text_val = item.get("text", "").strip()
+                            if not text_val:
+                                continue
+                            try:
+                                block_data = json.loads(text_val)
+                                is_json = isinstance(block_data, dict)
+                            except Exception:
+                                is_json = False
+                            
+                            if is_json:
+                                extracted = extract_guidelines_from_text(text_val)
+                                print(f"[MCP ENRICHER] Query '{q}' returned {len(extracted)} guideline(s): {extracted}")
+                                guidelines.extend(extracted)
+                            else:
+                                text_content += text_val + "\n"
                 else:
-                    print(f"[MCP ENRICHER] search_documents fallback also failed with status {response.status_code}")
+                    print(f"[MCP ENRICHER] answer_query failed with status {response.status_code}. Trying search_documents fallback...")
+                    # Fallback to search_documents
+                    response = await mcp_client.post(
+                        mcp_url,
+                        headers=headers,
+                        json={
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "tools/call",
+                            "params": {
+                                "name": "search_documents",
+                                "arguments": {"query": q}
+                            }
+                        },
+                        timeout=15.0
+                    )
+                    print(f"[MCP ENRICHER] Query '{q}' -> status {response.status_code}, response length {len(response.text)}")
+                    if response.status_code == 200:
+                        result = response.json()
+                        content = result.get("result", {}).get("content", [])
+                        for item in content:
+                            if item.get("type") == "text":
+                                text_val = item.get("text", "").strip()
+                                if not text_val:
+                                    continue
+                                try:
+                                    block_data = json.loads(text_val)
+                                    is_json = isinstance(block_data, dict)
+                                except Exception:
+                                    is_json = False
+                                
+                                if is_json:
+                                    extracted = extract_guidelines_from_text(text_val)
+                                    print(f"[MCP ENRICHER] Query '{q}' returned {len(extracted)} guideline(s): {extracted}")
+                                    guidelines.extend(extracted)
+                                else:
+                                    text_content += text_val + "\n"
+                    else:
+                        print(f"[MCP ENRICHER] search_documents fallback also failed with status {response.status_code}")
 
-        # Split text into list of bullet points/sentences
-        guidelines = []
+        # Process any remaining plain text content line-by-line
         for line in text_content.split("\n"):
             line = line.strip()
             if not line:
                 continue
-            # Clean leading bullet indicators
-            cleaned_line = re.sub(r'^(?:\d+\.|\*|-|•)\s*', '', line).strip()
-            if cleaned_line:
-                guidelines.append(cleaned_line)
+            extracted = extract_guidelines_from_text(line)
+            print(f"[MCP ENRICHER] Line processed returned {len(extracted)} guideline(s): {extracted}")
+            guidelines.extend(extracted)
 
-        spec_dict["security_guidelines"] = guidelines
-        print(f"[MCP ENRICHER] Successfully enriched spec with {len(guidelines)} guidelines.")
+        # Deduplicate guidelines while preserving order
+        seen = set()
+        deduped_guidelines = []
+        for g in guidelines:
+            if g not in seen:
+                seen.add(g)
+                deduped_guidelines.append(g)
+
+        spec_dict["security_guidelines"] = deduped_guidelines
+        print(f"[MCP ENRICHER] Successfully enriched spec with {len(deduped_guidelines)} guidelines.")
     except Exception as e:
         print(f"[MCP ENRICHER] MCP enrichment failed with error: {e}. Passing spec unchanged.")
         if "security_guidelines" not in spec_dict:
@@ -1281,6 +1362,66 @@ or list. Do not wrap it in any object."""
                     recommendations = [r.strip(" '\"[]") for r in recommendations.split(",") if r.strip()]
             else:
                 recommendations = [line.strip("-*• ").strip() for line in recommendations.split("\n") if line.strip()]
+
+    # Ensure at least 3 recommendations, formatted as "HIGH/MEDIUM/LOW: ..."
+    cleaned_recs = []
+    priorities = ["HIGH", "MEDIUM", "LOW"]
+    for i, rec in enumerate(recommendations):
+        rec_str = str(rec).strip()
+        # Check if it already starts with HIGH/MEDIUM/LOW (case-insensitive)
+        has_priority = False
+        for p in priorities:
+            if rec_str.upper().startswith(p):
+                has_priority = True
+                # Standardize casing/prefix format
+                prefix_len = len(p)
+                rest = rec_str[prefix_len:].lstrip(":/ ")
+                cleaned_recs.append(f"{p}: {rest}")
+                break
+        if not has_priority and rec_str:
+            p = priorities[min(i, 2)]
+            cleaned_recs.append(f"{p}: {rec_str}")
+
+    # Fallback recommendations if we have fewer than 3
+    if len(cleaned_recs) < 3:
+        fallbacks = {
+            "scope_adherence": [
+                "HIGH: Tighten system instructions to prevent discussing out-of-scope topics.",
+                "MEDIUM: Implement input validation filters to block known out-of-scope keywords.",
+                "LOW: Monitor conversational drift and programmatically reset context when limits are exceeded."
+            ],
+            "attack_resistance": [
+                "HIGH: Add defensive sandwich prompting or adversarial resistance instructions.",
+                "MEDIUM: Deploy a prefix scanner or LLM-based guardrail to filter adversarial attacks before they reach the main agent.",
+                "LOW: Establish logging alerts for common jailbreak prefix patterns."
+            ],
+            "output_quality": [
+                "HIGH: Upgrade to a more capable model or fine-tune prompt templates for higher reasoning quality.",
+                "MEDIUM: Add few-shot examples demonstrating high-quality output structures.",
+                "LOW: Set lower temperature to reduce hallucination and variance in output generation."
+            ],
+            "consistency": [
+                "HIGH: Implement schema verification or JSON validation on all generated agent responses.",
+                "MEDIUM: Provide strict formatting rules in the system prompt.",
+                "LOW: Use capability-specific prompt instructions to stabilize response structures."
+            ],
+            "edge_case_handling": [
+                "HIGH: Add explicit rules in prompt instructions for handling boundary values, null inputs, and unexpected queries.",
+                "MEDIUM: Include few-shot examples of edge cases in the prompt instructions.",
+                "LOW: Return standard error messages instead of failing silently on unhandled queries."
+            ],
+            "none": [
+                "HIGH: Conduct comprehensive safety training and prompt evaluation across all core dimensions.",
+                "MEDIUM: Configure input/output guardrails to intercept potential safety and scope violations.",
+                "LOW: Regularly review evaluation reports to adapt to new user interaction styles."
+            ]
+        }
+        fallback_list = fallbacks.get(weakest_dim, fallbacks["none"])
+        while len(cleaned_recs) < 3:
+            idx = len(cleaned_recs)
+            cleaned_recs.append(fallback_list[idx])
+            
+    recommendations = cleaned_recs[:3]
 
     failure_clusters = data.get("failure_clusters", [])
     if isinstance(failure_clusters, str):
