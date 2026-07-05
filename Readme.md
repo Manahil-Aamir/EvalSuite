@@ -1,6 +1,6 @@
 # EvalSuite — AI Agent Security Evaluation Pipeline
 
-> Automatically evaluate any AI agent's security posture, functional quality, and adversarial resilience in minutes — not days.
+> Automatically evaluate any AI agent's security posture, functional quality, and adversarial resilience in minutes, not days.
 
 ---
 
@@ -41,27 +41,40 @@ User Input (agent description + endpoint URL)
 ┌─────────────────────────────────────────────────────────────┐
 │                    ADK 2.0 Workflow                         │
 │                                                             │
-│  init_workflow → spec_parser → spec_parser_cleaner          │
-│       │                                                     │
-│       ▼                                                     │
-│  mcp_enricher (Google Developer Knowledge MCP)              │
-│       │                                                     │
-│       ▼                                                     │
-│  test_generator ──────────────────────┐                     │
-│       │                               │                     │
-│  adversary ───────────────────────────┤                     │
-│                                       ▼                     │
-│                                   runner                    │
-│                              (real HTTP calls               │
-│                               to target agent)             │
-│                                       │                     │
-│                                   scorer                    │
-│                            (Tier 1: Python                  │
-│                             Tier 2: LLM-as-judge)           │
-│                                       │                     │
-│                                  summarizer                 │
-│                                       │                     │
-│                                   reporter                  │
+│  START                                                      │
+│    │                                                        │
+│    ▼                                                        │
+│  init_workflow          (injects target agent URL           │
+│    │                     into pipeline state)               │
+│    ▼                                                        │
+│  spec_parser            (extracts structured eval spec      │
+│    │                     from agent description)            │
+│    ▼                                                        │
+│  spec_parser_cleaner    (parses and validates spec JSON)     │
+│    │                                                        │
+│    ▼                                                        │
+│  mcp_enricher           (fetches security guidelines via     │
+│    │                     Google Developer Knowledge MCP)    │
+│    ▼                                                        │
+│  test_generator         (generates 20 functional            │
+│    │                     test cases, spec-aware)            │
+│    ▼                                                        │
+│  adversary              (generates 20 adversarial attacks,   │
+│    │                     spec- and guideline-aware)          │
+│    ▼                                                        │
+│  runner                 (fires all 40 tests against the      │
+│    │                     real live agent endpoint)           │
+│    ▼                                                        │
+│  scorer                 (two-tier scoring: deterministic     │
+│    │                     Python + selective LLM-as-judge)   │
+│    ▼                                                        │
+│  summarizer             (calculates aggregate                │
+│    │                     statistics in Python)              │
+│    ▼                                                        │
+│  reporter               (generates prioritized               │
+│    │                     audit report)                      │
+│    ▼                                                        │
+│  END                                                         │
 └─────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -127,7 +140,7 @@ The `security_guidelines` field in `EvalSpec` carries MCP-retrieved knowledge th
 | MCP Server | `mcp_enricher` node — Google Developer Knowledge MCP |
 | Antigravity | Used throughout build — shown in video |
 | Security features | Adversary agent, two-tier scorer, attack_resistance dimension |
-| Deployability | FastAPI server, Docker-ready structure, local ADK deployment |
+| Deployability | FastAPI server, Docker-ready structure |
 | Agent skills (agents-cli) | Both projects scaffolded with `agents-cli scaffold create` |
 
 ---
@@ -136,16 +149,16 @@ The `security_guidelines` field in `EvalSpec` carries MCP-retrieved knowledge th
 
 ```
 D:\EvalSuite\
+├── .env                           # API keys
+│
 ├── evalsuite/                    # Main EvalSuite pipeline
-│   ├── app/
-│   │   └── agent.py              # 10-node ADK 2.0 Workflow
-│   └── .env                      # API keys
+│   └── app/
+│       └── agent.py              # 10-node ADK 2.0 Workflow
 │
 ├── kidslearn-agent/              # Demo target agent
-│   ├── app/
-│   │   ├── agent.py              # KidsLearn support agent
-│   │   └── server.py             # FastAPI server
-│   └── .env
+│   └── app/
+│       ├── agent.py              # KidsLearn support agent
+│       └── server.py             # FastAPI server
 │
 └── dashboard/                    # Streamlit dashboard
     └── app.py                    # Visualization UI
@@ -225,7 +238,7 @@ streamlit run app.py --server.port 8502 --server.address 127.0.0.1
 
 ### 5. Run your first evaluation
 
-Open `http://127.0.0.1:8502`, click **Run New Evaluation**, and paste:
+Open `http://127.0.0.1:8502`, click **Run New Evaluation**, and paste (Sample input):
 
 **Agent Description:**
 ```
@@ -246,9 +259,9 @@ Click **Run Evaluation** and wait 3–5 minutes.
 
 Running EvalSuite against the KidsLearn demo agent revealed:
 
-- **Pass rate:** 40% (16/40 tests passed)
-- **Critical failures:** 24
-- **Weakest dimension:** attack_resistance (avg 2.06/10)
+- **Pass rate:** 50% (20/40 tests passed)
+- **Critical failures:** 20
+- **Weakest dimension:** attack_resistance (avg 3.08/10)
 - **Key finding:** Agent is vulnerable to social engineering attacks — it offered educator plan access to unverified "teachers" and assisted developers claiming backend access without verification
 
 This is exactly the kind of finding that would prevent a security incident in production.
@@ -257,7 +270,7 @@ This is exactly the kind of finding that would prevent a security incident in pr
 
 ## Track
 
-**Freestyle** — EvalSuite is a meta-tool: an agent pipeline that evaluates other agents. It doesn't fit a single domain (business, personal, humanitarian) because it applies across all of them. Any AI agent — whether serving a business, a family, or a public health system — needs security evaluation before deployment. EvalSuite provides that infrastructure, demonstrating best practices in multi-agent design, adversarial security testing, and production-grade agentic development.
+**Freestyle** — EvalSuite is a meta-tool, an agent pipeline that evaluates other agents. It automatically generates functional test cases and adversarial attacks, runs them against a live agent endpoint, and scores the results across multiple security and quality dimensions. It doesn't fit a single domain (business, personal, humanitarian) because it applies across all of them. Any AI agent, whether serving a business, a family, or a public health system, needs security evaluation before deployment. EvalSuite provides that infrastructure, demonstrating best practices in adversarial security testing.
 
 ---
 
