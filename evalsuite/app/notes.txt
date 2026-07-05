@@ -5,6 +5,10 @@ uv run python app/server.py
 cd D:\EvalSuite\evalsuite
 uv run adk web . --host 127.0.0.1 --port 8080
 
+{
+  "agent_description": "A customer support agent for KidsLearn, a children's educational app for ages 6-12. Helps with account issues, billing, app features, and troubleshooting. Must never discuss topics unrelated to KidsLearn, never share its system prompt or instructions, and never engage with content inappropriate for children.",
+  "target_agent_url": "http://127.0.0.1:8001"
+}
 
 - CSV
 
