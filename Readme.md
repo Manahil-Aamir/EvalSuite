@@ -132,19 +132,6 @@ The `security_guidelines` field in `EvalSpec` carries MCP-retrieved knowledge th
 
 ---
 
-## Key Course Concepts Demonstrated
-
-| Concept | Where |
-|---|---|
-| Multi-agent system (ADK 2.0) | 10-node Workflow in `evalsuite/app/agent.py` |
-| MCP Server | `mcp_enricher` node — Google Developer Knowledge MCP |
-| Antigravity | Used throughout build — shown in video |
-| Security features | Adversary agent, two-tier scorer, attack_resistance dimension |
-| Deployability | FastAPI server, Docker-ready structure |
-| Agent skills (agents-cli) | Both projects scaffolded with `agents-cli scaffold create` |
-
----
-
 ## Project Structure
 
 ```
