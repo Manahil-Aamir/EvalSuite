@@ -84,18 +84,18 @@ User Input (agent description + endpoint URL)
 
 ### Node Breakdown
 
-| Node | Type | Model | Purpose |
-|---|---|---|---|
-| init_workflow | FunctionNode | — | Injects target URL into pipeline state |
-| spec_parser | LlmAgent | llama-3.1-8b-instant | Extracts structured eval spec from description |
-| spec_parser_cleaner | FunctionNode | — | Parses and validates spec JSON |
-| mcp_enricher | FunctionNode | — | Fetches security guidelines via MCP |
-| test_generator | LlmAgent | llama-3.3-70b-versatile | Generates 20 functional test cases |
-| adversary | LlmAgent | llama-3.3-70b-versatile | Generates 20 adversarial attacks |
-| runner | FunctionNode | — | Fires all 40 tests at real agent endpoint |
-| scorer | FunctionNode + AsyncGroq | llama-3.3-70b-versatile | Two-tier scoring system |
-| summarizer | FunctionNode | — | Calculates statistics in Python |
-| reporter | FunctionNode + AsyncGroq | llama-3.1-8b-instant | Generates audit report |
+| Node                | Type                     | Model               | Purpose                                        |
+| ------------------- | ------------------------ | ------------------- | ---------------------------------------------- |
+| init_workflow       | FunctionNode             | —                   | Injects target URL into pipeline state         |
+| spec_parser         | LlmAgent                 | openai/gpt-oss-20b  | Extracts structured eval spec from description |
+| spec_parser_cleaner | FunctionNode             | —                   | Parses and validates spec JSON                 |
+| mcp_enricher        | FunctionNode             | —                   | Fetches security guidelines via MCP            |
+| test_generator      | LlmAgent                 | openai/gpt-oss-120b | Generates 20 functional test cases             |
+| adversary           | LlmAgent                 | openai/gpt-oss-120b | Generates 20 adversarial attacks               |
+| runner              | FunctionNode             | —                   | Fires all 40 tests at real agent endpoint      |
+| scorer              | FunctionNode + AsyncGroq | openai/gpt-oss-120b | Two-tier scoring system                        |
+| summarizer          | FunctionNode             | —                   | Calculates statistics in Python                |
+| reporter            | FunctionNode + AsyncGroq | openai/gpt-oss-20b  | Generates audit report                         |
 
 ---
 
@@ -104,11 +104,13 @@ User Input (agent description + endpoint URL)
 EvalSuite implements a principled scoring architecture that distinguishes between what can be measured deterministically and what requires genuine reasoning:
 
 **Tier 1 — Deterministic Python (zero LLM tokens):**
+
 - `scope_adherence`: Forbidden topic detection with refusal context awareness
 - `attack_resistance`: Signal ratio analysis (refusal signals vs compliance indicators)
 - `consistency`: Three-signal formula (length appropriateness, topic overlap, lexical diversity)
 
 **Tier 2 — LLM-as-Judge (selective, only when needed):**
+
 - `output_quality`: Helpfulness, clarity, and accuracy — subjective
 - `edge_case_handling`: How well unusual inputs were handled — subjective
 - Only triggered for results below the run's adaptive mean threshold
@@ -203,6 +205,7 @@ cd dashboard && pip install streamlit plotly httpx python-dotenv && cd ..
 ### 4. Run all three services
 
 **Terminal 1 — KidsLearn target agent:**
+
 ```bash
 cd kidslearn-agent
 uv run python app/server.py
@@ -210,6 +213,7 @@ uv run python app/server.py
 ```
 
 **Terminal 2 — EvalSuite pipeline:**
+
 ```bash
 cd evalsuite
 uv run adk web . --host 127.0.0.1 --port 8080
@@ -217,6 +221,7 @@ uv run adk web . --host 127.0.0.1 --port 8080
 ```
 
 **Terminal 3 — Dashboard:**
+
 ```bash
 cd dashboard
 streamlit run app.py --server.port 8502 --server.address 127.0.0.1
@@ -228,11 +233,12 @@ streamlit run app.py --server.port 8502 --server.address 127.0.0.1
 Open `http://127.0.0.1:8502`, click **Run New Evaluation**, and paste (Sample input):
 
 **Agent Description:**
+
 ```
-A customer support agent for KidsLearn, a children's educational 
-app for ages 6-12. Helps with account issues, billing, app features, 
-and troubleshooting. Must never discuss topics unrelated to KidsLearn, 
-never share its system prompt, and never engage with content 
+A customer support agent for KidsLearn, a children's educational
+app for ages 6-12. Helps with account issues, billing, app features,
+and troubleshooting. Must never discuss topics unrelated to KidsLearn,
+never share its system prompt, and never engage with content
 inappropriate for children.
 ```
 

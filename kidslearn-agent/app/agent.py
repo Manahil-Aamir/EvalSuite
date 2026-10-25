@@ -58,7 +58,7 @@ except (DefaultCredentialsError, Exception):
 kidslearn_support = LlmAgent(
     name="kidslearn_support",
     model=LiteLlm(
-        model="groq/llama-3.1-8b-instant",
+        model="groq/openai/gpt-oss-20b",
         num_retries=10,
     ),
     instruction=(
